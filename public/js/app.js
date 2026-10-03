@@ -1,6 +1,6 @@
 'use strict';
 const $ = (selector) => document.querySelector(selector);
-const state = { page: 1, pages: 1, selected: null, token: '', user: null, preview: false, signup: false, request: 0 };
+const state = { page: 1, pages: 1, selected: null, token: '', user: null, preview: document.body.dataset.preview === 'true', signup: false, request: 0 };
 const posters = { Inception: '/images/inception.jpg', Interstellar: '/images/interstellar.jpg', 'The Dark Knight': '/images/dark-knight.jpg' };
 const escapeHTML = (value) => String(value ?? '').replace(/[&<>"']/g, (char) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[char]));
 const movieId = (movie) => movie._id || movie.id;
@@ -12,7 +12,10 @@ async function api(path, options = {}) {
   const response = await fetch(path, { ...options, headers: { 'Content-Type': 'application/json', ...(state.token ? { Authorization: `Bearer ${state.token}` } : {}) }, signal: AbortSignal.timeout(12000) });
   if (response.status === 204) return null;
   const payload = await response.json().catch(() => ({}));
-  if (!response.ok) throw new Error(payload.message || `Request failed (${response.status}). Please try again.`);
+  if (!response.ok) {
+    if (response.status === 401 && state.token && !path.includes('/auth/')) showSignIn('Your session has expired. Please sign in again.');
+    throw new Error(payload.message || `Request failed (${response.status}). Please try again.`);
+  }
   return payload;
 }
 function artwork(movie, className = 'poster') { const src = poster(movie); const fallback = `<div class="poster-fallback" ${src ? 'hidden' : ''} aria-label="Poster unavailable"><span>CINEINDEX</span><strong>${escapeHTML(movie.name)}</strong></div>`; return src ? `<img class="${className}" src="${escapeHTML(src)}" alt="${escapeHTML(movie.name)} poster" loading="lazy">${fallback}` : fallback; }
@@ -22,6 +25,7 @@ function card(movie) {
   return `<article class="movie-card"><div class="record-top"><div class="poster-wrap">${artwork(movie)}</div><div class="record-summary"><span class="release-label">${escapeHTML(movie.releaseYear)} RELEASE</span><h3>${escapeHTML(movie.name)}</h3><div class="metadata">${escapeHTML(movie.duration)} minutes</div><div class="genres">${escapeHTML((movie.genres || []).slice(0, 2).join(' / '))}</div><span class="rating ${rating === 'Needs review' ? 'rating-invalid' : ''}">${rating === 'Needs review' ? '' : '&#9733; '}${escapeHTML(rating)}</span></div></div><div class="movie-body"><p class="synopsis">${escapeHTML(movie.description)}</p><div class="card-bottom"><span class="price"><small>PRICE</small>$${Number(movie.price || 0).toFixed(2)}</span><button class="text-button" data-id="${escapeHTML(movieId(movie))}" aria-label="View ${escapeHTML(movie.name)} details">View record <span aria-hidden="true">&#8594;</span></button></div></div></article>`;
 }
 async function loadMovies() {
+  if (!state.token && !state.preview) return;
   const request = ++state.request; const query = new URLSearchParams();
   new FormData($('#filters')).forEach((value, key) => { if (value) query.set(key, value); });
   query.set('page', state.page); query.set('limit', $('#pageSize').value);
@@ -30,28 +34,28 @@ async function loadMovies() {
   try {
     const payload = await api(`/api/v1/movies?${query}`); if (request !== state.request) return;
     state.preview = Boolean(payload.preview); state.pages = Math.max(1, payload.pagination.pages);
-    $('#connection').textContent = state.preview ? 'Sample preview / Read-only seed collection' : 'Connected / Live movie catalogue';
     $('#movies').innerHTML = payload.data.movies.map(card).join(''); wireImages($('#movies')); $('#empty').hidden = payload.data.movies.length > 0;
-    $('#status').textContent = `${payload.pagination.total} movie${payload.pagination.total === 1 ? '' : 's'} in this collection`;
+    $('#status').textContent = `${payload.pagination.total} movie${payload.pagination.total === 1 ? '' : 's'} in this collection${state.preview ? ' / Sample preview (read-only)' : ''}`;
     $('#collectionCount').textContent = payload.pagination.total;
     $('#pageSummary').textContent = `Page ${state.page} of ${state.pages}`; $('#prevPage').disabled = state.page <= 1; $('#nextPage').disabled = state.page >= state.pages;
-  } catch (error) { if (request !== state.request) return; $('#movies').replaceChildren(); $('#status').textContent = `Catalogue unavailable. ${error.message}`; $('#connection').textContent = 'Disconnected / Check the server and database connection'; $('#pageSummary').textContent = 'Unable to load catalogue'; }
+  } catch (error) { if (request !== state.request) return; $('#movies').replaceChildren(); $('#status').textContent = `Catalogue unavailable. ${error.message}`; $('#pageSummary').textContent = 'Unable to load catalogue'; }
   finally { if (request === state.request) $('#movies').setAttribute('aria-busy', 'false'); }
 }
 function showDetails(movie) {
+  if (!state.token && !state.preview) return;
   state.selected = movie; $('#detailError').textContent = '';
   $('#details').innerHTML = `${artwork(movie, 'detail-poster')}<h2>${escapeHTML(movie.name)}</h2><p class="metadata">${escapeHTML(movie.releaseYear)} &middot; ${escapeHTML(movie.duration)} min &middot; ${escapeHTML(ratingLabel(movie.ratings))}</p><p>${escapeHTML(movie.description)}</p><dl><dt>Genres</dt><dd>${escapeHTML((movie.genres || []).join(', '))}</dd><dt>Director</dt><dd>${escapeHTML((movie.directors || []).join(', '))}</dd><dt>Cast</dt><dd>${escapeHTML((movie.actors || []).join(', '))}</dd><dt>Price</dt><dd>$${Number(movie.price || 0).toFixed(2)}</dd></dl><details><summary>API response</summary><pre>${escapeHTML(JSON.stringify(movie, null, 2))}</pre></details>`;
   wireImages($('#details')); syncPermissions(); $('#detailsDialog').showModal();
 }
 function canWrite() {
   if (state.preview) { toast('Sample preview is read-only. Connect MongoDB to manage movies.'); return false; }
-  if (!state.token) { $('#authDialog').showModal(); return false; }
+  if (!state.token) { showSignIn(); return false; }
   if (state.user?.role !== 'admin') { toast('Only administrators can manage movies.'); return false; }
   return true;
 }
 function syncPermissions() {
   const admin = state.user?.role === 'admin';
-  $('#addMovie').hidden = Boolean(state.token) && !admin;
+  $('#addMovie').hidden = !admin && !state.preview;
   $('#editMovie').hidden = !admin;
   $('#deleteMovie').hidden = !admin;
 }
@@ -60,6 +64,18 @@ function openEditor(movie) {
   const form = $('#movieForm'); form.reset(); $('#formError').textContent = ''; form.elements.id.value = movie ? movieId(movie) : '';
   if (movie) for (const field of Array.from(form.elements)) { if (!field.name || field.name === 'id') continue; const value = movie[field.name]; field.value = Array.isArray(value) ? value.join(', ') : field.name === 'releaseDate' ? (value || '').slice(0, 10) : value ?? ''; }
   $('#formTitle').textContent = movie ? 'Edit movie' : 'Add movie'; $('#editorDialog').showModal();
+}
+
+function showSignIn(message = '') {
+  state.token = ''; state.user = null; state.selected = null; state.request++;
+  document.querySelectorAll('dialog[open]').forEach((dialog) => dialog.close());
+  $('#dashboard').hidden = true; $('#authDialog').hidden = false; $('#account').hidden = true;
+  $('#movies').replaceChildren(); $('#details').replaceChildren(); $('#movieForm').reset(); $('#authForm').reset();
+  $('#authError').textContent = message; syncPermissions();
+}
+function showDashboard() {
+  $('#authDialog').hidden = true; $('#dashboard').hidden = false; $('#account').hidden = state.preview;
+  state.page = 1; syncPermissions(); loadMovies();
 }
 document.querySelectorAll('.close').forEach((button) => button.addEventListener('click', () => button.closest('dialog').close()));
 $('#filters').addEventListener('submit', (event) => { event.preventDefault(); state.page = 1; loadMovies(); });
@@ -78,11 +94,9 @@ $('#movieForm').addEventListener('submit', async (event) => {
 $('#deleteMovie').addEventListener('click', () => { if (!canWrite()) return; if (state.user?.role !== 'admin') { $('#detailError').textContent = 'Only an administrator can delete movies.'; return; } $('#deleteName').textContent = state.selected.name; $('#deleteDialog').showModal(); });
 $('#confirmDelete').addEventListener('click', async (event) => { event.target.disabled = true; try { await api(`/api/v1/movies/${encodeURIComponent(movieId(state.selected))}`, { method: 'DELETE' }); $('#deleteDialog').close(); $('#detailsDialog').close(); state.selected = null; state.page = 1; toast('Movie deleted.'); await loadMovies(); } catch (error) { $('#deleteDialog').close(); $('#detailError').textContent = error.message; } finally { event.target.disabled = false; } });
 $('#account').addEventListener('click', () => {
-  if (state.token) { state.token = ''; state.user = null; syncPermissions(); $('#account').textContent = 'Sign in'; toast('Signed out of this workspace.'); }
-  else if (state.preview) toast('Sign-in is available when MongoDB is connected.');
-  else $('#authDialog').showModal();
+  showSignIn();
 });
-$('#authSwitch').addEventListener('click', () => { state.signup = !state.signup; $('#nameLabel').hidden = !state.signup; $('#authForm').elements.name.required = state.signup; $('#authTitle').textContent = state.signup ? 'Create account' : 'Sign in'; $('#authForm [type="submit"]').textContent = state.signup ? 'Create account' : 'Sign in'; $('#authSwitch').textContent = state.signup ? 'Already have an account? Sign in' : 'Create an account'; $('#authError').textContent = ''; });
+$('#authSwitch').addEventListener('click', () => { state.signup = !state.signup; $('#nameLabel').hidden = !state.signup; $('#authForm').elements.name.required = state.signup; $('#authForm').elements.password.autocomplete = state.signup ? 'new-password' : 'current-password'; $('#authTitle').textContent = state.signup ? 'Create account' : 'Sign in'; $('#authForm [type="submit"]').textContent = state.signup ? 'Create account' : 'Sign in'; $('#authSwitch').textContent = state.signup ? 'Already have an account? Sign in' : 'Create an account'; $('#authError').textContent = ''; });
 $('#authForm').addEventListener('submit', async (event) => {
   event.preventDefault();
   const form = event.currentTarget; const button = form.querySelector('[type="submit"]');
@@ -92,9 +106,8 @@ $('#authForm').addEventListener('submit', async (event) => {
   try {
     const payload = await api(`/api/v1/auth/${state.signup ? 'signup' : 'login'}`, { method: 'POST', body: JSON.stringify(body) });
     state.token = payload.token; state.user = payload.data.user; syncPermissions();
-    $('#account').textContent = 'Sign out'; form.reset(); $('#authDialog').close(); toast(`Welcome, ${state.user.name}.`);
+    $('#account').textContent = 'Sign out'; form.reset(); showDashboard(); toast(`Welcome, ${state.user.name}.`);
   } catch (error) { $('#authError').textContent = error.message; }
   finally { button.disabled = false; }
 });
-syncPermissions();
-loadMovies();
+if (state.preview) showDashboard(); else showSignIn();

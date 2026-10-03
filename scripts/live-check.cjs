@@ -18,10 +18,15 @@ async function request(path, method = 'GET', body) {
 (async () => {
   await mongoose.connect(process.env.CONN_STR);
   try {
-    let response = await request('/auth/signup', 'POST', { name: 'Temporary check', email, password, confirmPassword: password });
+    let response = await request('/movies');
+    assert.equal(response.status, 401);
+    response = await request('/auth/signup', 'POST', { name: 'Temporary check', email, password, confirmPassword: password, role: 'admin' });
     assert.equal(response.status, 201, response.data.message);
+    assert.equal(response.data.data.user.role, 'user');
     response = await request('/auth/login', 'POST', { email, password });
     assert.equal(response.status, 200, response.data.message); token = response.data.token;
+    response = await request('/movies?limit=1');
+    assert.equal(response.status, 200);
     const movie = { ...require('../data/movies.json')[0], name: movieName, price: 0 };
     response = await request('/movies', 'POST', movie);
     assert.equal(response.status, 403, 'Regular users cannot create movies');

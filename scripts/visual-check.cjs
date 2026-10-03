@@ -8,6 +8,20 @@ const { chromium } = require(process.env.PLAYWRIGHT_MODULE || 'playwright');
     const errors = [];
     page.on('pageerror', (error) => errors.push(error.message));
     await page.goto(process.env.CINEINDEX_URL || 'http://127.0.0.1:1000');
+    if (await page.locator('#authDialog').isVisible()) {
+      assert.equal(await page.locator('#dashboard').isVisible(), false);
+      const formBox = await page.locator('.auth-surface').boundingBox();
+      assert(Math.abs(formBox.x + formBox.width / 2 - 720) < 2, 'Sign-in form is horizontally centered');
+      await page.screenshot({ path: path.join(__dirname, '../frontend-auth.png'), fullPage: true });
+      for (const width of [768, 390, 320]) {
+        await page.setViewportSize({ width, height: 844 });
+        assert(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth));
+        if (width === 390) await page.screenshot({ path: path.join(__dirname, '../frontend-auth-mobile.png'), fullPage: true });
+      }
+      assert.deepEqual(errors, []);
+      console.log('Visual checks passed: sign-in screen, hidden dashboard, desktop and 768/390/320px layouts.');
+      return;
+    }
     await page.locator('.movie-card').first().waitFor();
     await page.waitForFunction(() => [...document.querySelectorAll('.poster')].every((image) => image.complete && image.naturalWidth > 0));
     assert.equal(await page.locator('.rating-invalid').count(), 0);

@@ -7,6 +7,8 @@ can add, edit, and delete movies through the interface or REST API.
 The application uses Node.js, Express, MongoDB, and Mongoose. Express serves both
 the responsive browser interface and the API, so they run as one application.
 
+[Open CineIndex](https://cineindex-rb7s.onrender.com).
+
 ## Contents
 
 - [Using CineIndex](#using-cineindex)
@@ -24,7 +26,8 @@ the responsive browser interface and the API, so they run as one application.
 
 ## Using CineIndex
 
-Open the app to view the movie catalogue. Each record shows its poster, title,
+Sign in or create an account to view the movie catalogue. The catalogue and all
+movie API routes require authentication. Each record shows its poster, title,
 release year, duration, genres, rating, and price.
 
 | Action | Workflow |
@@ -35,7 +38,7 @@ release year, duration, genres, rating, and price.
 | Reset | Use the reset button beside the filters to restore the default selection. |
 | Inspect | Select **View record** to see the synopsis, cast, directors, and other details. |
 | Inspect JSON | Expand **API response** inside the record dialog. |
-| Register | Select **Sign in**, then **Create an account**. Enter your name, email, and password. |
+| Register | On the sign-in screen, select **Create an account**. Enter your name, email, and password. |
 | Add a movie | As an administrator, select **Add movie**, complete the form, and save. |
 | Edit a movie | As an administrator, open its record, select **Edit movie**, and save your changes. |
 | Delete a movie | As an administrator, open its record, select **Delete movie**, and confirm. |
@@ -57,8 +60,8 @@ payment processing, or movie playback.
 
 | Role | Permissions |
 | --- | --- |
-| Visitor | Browse, filter, sort, paginate, and view records; register or sign in. |
-| Registered user | Browse the collection; use authenticated account endpoints. |
+| Visitor | Register or sign in; cannot access the catalogue or movie API. |
+| Registered user | Browse, filter, sort, paginate, view records, and use authenticated account endpoints. |
 | Administrator | All user permissions, plus movie creation, editing, deletion, and user listing. |
 
 Public registration always creates a `user` account. Supplying an `admin` role
@@ -76,8 +79,9 @@ are enforced by the API independently of whether a button is visible.
 Only someone with authorized database access should assign administrator roles.
 There is no public role-assignment endpoint.
 
-The browser keeps its bearer token in memory. Refreshing the page clears the
-interface session, so sign in again to manage movies. Workspace sign-out clears
+The browser keeps its bearer token in memory. Refreshing the page returns to
+the sign-in screen. Signing out clears movie records from the interface and returns
+to that screen. Workspace sign-out clears
 the browser's token; it does not revoke an already issued token on the server.
 Protected API requests require an `Authorization: Bearer <token>` header.
 
@@ -198,8 +202,8 @@ declares these arrays required, but does not enforce a minimum array length.
 
 ## API Reference
 
-Base path: `/api/v1`. Request bodies use JSON. Browsing routes are public;
-protected routes require a bearer token returned by signup or login.
+Base path: `/api/v1`. Request bodies use JSON. All movie routes require a bearer
+token returned by signup or login; writing also requires the admin role.
 
 ### Movies and Service Information
 
@@ -207,11 +211,11 @@ protected routes require a bearer token returned by signup or login.
 | --- | --- | --- | --- |
 | GET | `/health` | Public | Reports that the HTTP service is running. |
 | GET | `/api/v1` | Public | Returns the API index. |
-| GET | `/api/v1/movies` | Public | Lists movies with query controls. |
-| GET | `/api/v1/movies/:id` | Public | Retrieves one movie by MongoDB ID. |
-| GET | `/api/v1/movies/highest-rated` | Public | Lists up to five movies ordered by rating. |
-| GET | `/api/v1/movies/movies-stats` | Public | Groups qualifying movies by release year with rating and price statistics. |
-| GET | `/api/v1/movies/movies-by-genre/:genre` | Public | Returns the count and titles for a genre. |
+| GET | `/api/v1/movies` | Signed-in user | Lists movies with query controls. |
+| GET | `/api/v1/movies/:id` | Signed-in user | Retrieves one movie by MongoDB ID. |
+| GET | `/api/v1/movies/highest-rated` | Signed-in user | Lists up to five movies ordered by rating. |
+| GET | `/api/v1/movies/movies-stats` | Signed-in user | Groups qualifying movies by release year with rating and price statistics. |
+| GET | `/api/v1/movies/movies-by-genre/:genre` | Signed-in user | Returns the count and titles for a genre. |
 | POST | `/api/v1/movies` | Admin | Creates a movie; returns 201. |
 | PATCH | `/api/v1/movies/:id` | Admin | Updates supplied movie fields with validation. |
 | DELETE | `/api/v1/movies/:id` | Admin | Deletes a movie; returns 204 with no response body. |
@@ -237,7 +241,8 @@ Supported equality fields include `name`, `description`, `duration`, `ratings`,
 Example list request (`-g` prevents curl from treating brackets as URL globbing):
 
 ```bash
-curl -g 'http://localhost:1000/api/v1/movies?ratings[gte]=4.5&sort=-ratings&page=1&limit=6'
+curl -g 'http://localhost:1000/api/v1/movies?ratings[gte]=4.5&sort=-ratings&page=1&limit=6' \
+  -H 'Authorization: Bearer YOUR_TOKEN'
 ```
 
 ### Authentication and Account Routes
@@ -330,14 +335,15 @@ npm install --no-save playwright
 npx playwright install chromium
 ```
 
-With the sample preview running, run `node scripts/frontend-check.cjs`. This
-checks filters, empty states, pagination, dialogs, authentication error handling,
-and role-dependent controls. Write flows use mocked responses and do not modify
-a database.
+With the actual app running, run `node scripts/frontend-check.cjs`. This
+checks the sign-in gate, signup/login, filters, empty states, pagination, dialogs,
+sign-out, expiry, and role-dependent controls. API flows use mocked responses and
+do not modify a database.
 
-With the actual app running, run `node scripts/visual-check.cjs` to check the
-catalogue, poster loading, and desktop/mobile layout. It defaults to
-`http://127.0.0.1:1000`; set `CINEINDEX_URL` to use another address.
+Run `node scripts/visual-check.cjs` to check the signed-out screen and desktop/mobile
+layout. It defaults to `http://127.0.0.1:1000`; set `CINEINDEX_URL` to use another
+address. When pointed to the read-only sample preview, it instead checks catalogue
+artwork and details. The sample preview remains separate from the protected app.
 
 For database integration checks, run `node scripts/live-check.cjs` against the
 local app configured by `config.env`. It tests signup/login, validation, and

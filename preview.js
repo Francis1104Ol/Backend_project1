@@ -1,8 +1,10 @@
 // Read-only preview uses seed records; production uses server.js.
 const express = require('express');
 const path = require('path');
+const fs = require('fs');
 const app = express();
 const movies = require('./data/movies.json').map((movie, index) => ({ ...movie, _id: `sample-${index + 1}` }));
+app.get('/', (req, res) => res.type('html').send(fs.readFileSync(path.join(__dirname, 'public/index.html'), 'utf8').replace('<body>', '<body data-preview="true">')));
 app.get('/api/v1/movies', (req, res) => {
   let results = movies.filter((movie) => (!req.query.genres || movie.genres.includes(req.query.genres)) && movie.ratings >= Number(req.query['ratings[gte]'] || 0));
   const sort = String(req.query.sort || '-ratings'); const field = sort.replace(/^-/, '');
