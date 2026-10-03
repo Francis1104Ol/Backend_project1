@@ -1,15 +1,20 @@
 {
-  "name": "day_56",
+  "name": "cineindex-api",
   "version": "1.0.0",
-  "description": "",
+  "description": "Backend-focused Movie API with CRUD, filtering, sorting, pagination, auth, validation, and a small API explorer.",
   "license": "ISC",
-  "author": "",
+  "author": "Francis Ol",
   "type": "commonjs",
-  "main": "app.js",
+  "main": "server.js",
+  "engines": { "node": ">=24 <25" },
   "scripts": {
-    "start": "cross-env NODE_ENV=development nodemon server.js",
-    "start_prod": "cross-env NODE_ENV=production nodemon server.js",
-    "test": "echo \"Error: no test specified\" && exit 1"
+    "start": "node server.js",
+    "preview": "node preview.js",
+    "dev": "cross-env NODE_ENV=development node --watch server.js",
+    "start:prod": "cross-env NODE_ENV=production node server.js",
+    "seed:import": "node data/import-dev_data.js --import",
+    "seed:delete": "node data/import-dev_data.js --delete",
+    "test": "node --test"
   },
   "dependencies": {
     "bcryptjs": "^3.0.3",
@@ -30,5 +35,12 @@
   "devDependencies": {
     "@types/jsonwebtoken": "^9.0.10"
   },
-  "keywords": []
+  "keywords": [
+    "node",
+    "express",
+    "mongodb",
+    "mongoose",
+    "rest-api",
+    "portfolio"
+  ]
 }

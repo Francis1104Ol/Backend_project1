@@ -1,10 +1,6 @@
 const User = require('../Models/userModel')
 const asyncErrorHandler = require('../Utils/asyncErrorHandler')
-const jwt = require('jsonwebtoken')
 const CustomError = require('../Utils/CustomError')
-const util = require ('util')
-const sendMail = require('../Utils/email')
-const crypto = require('crypto')
 const createSendResponse = require('../Utils/createSendResponse');
 
 
@@ -57,10 +53,10 @@ exports.updateMe = asyncErrorHandler(async(req, res, next)=>{
 })
 
 exports.deleteMe = asyncErrorHandler(async(req, res, next)=>{
-   const deletedUser = await User.findByIdAndUpdate(req.user.id,{active:false})
-    // res.status(204).json({
-    //     status:'success',
-    //     data:null
-    // })
-  createSendResponse(deletedUser, 204)  
+   await User.findByIdAndUpdate(req.user.id,{active:false})
+
+   res.status(204).json({
+    status:'success',
+    data:null
+   })
 })

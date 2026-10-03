@@ -1,15 +1,12 @@
 const mongoose = require('mongoose');
-const fs = require('fs')
-const validator = require('validator')
-const movieSchema =new mongoose.Schema({
+const movieSchema = new mongoose.Schema({
     name :{
         type: String,
         required: [true, "Name is a required field"],
-        unique: true,// unique is not a validator
+        unique: true,
         trim:true,
         maxLength:[100,"Movie name must not have more than 100 character"],
-        minLength:[4, "Movie name must not be less than 4"],//MINLENGTH AND MAXLENGTH CAN ONLY WORK ON TYE STRING
-        //validate:[validator.isAlpha, "name should only contain an alphabet"] //THIRD PARTY VALIDATOR
+        minLength:[2, "Movie name must not be less than 2 characters"],
     },
     description: {
         type: String,
@@ -18,35 +15,37 @@ const movieSchema =new mongoose.Schema({
     },
     duration:{
         type:Number,
-        required: [true, "Duration is required"] //validator
+        required: [true, "Duration is required"],
+        min: [1, 'Duration must be at least 1 minute']
     },
     ratings:{
         type:Number,
-        // min:[1, "Ratings must not be 1.0 or above"], //validator for type number
-        // max:[10, "Ratings must  be 10.0 or less"] built in validator
-        //custom validator
+        default: 1,
         validate:{
             validator:
             function(value){
            return value>=1 && value <=10;
            
         },
-        message:"Ratings ({VALUE}) should be above 1 or below 10"
+        message:"Ratings ({VALUE}) should be between 1 and 10"
     }
     },
-    totalRatings:{
-        type:Number
+    totalRating:{
+        type:Number,
+        default: 0,
+        min: [0, 'Total rating count cannot be negative']
     },
     releaseYear:{
         type:Number,
-        required: [true, "Release Year is required"] 
+        required: [true, "Release Year is required"],
+        min: [1888, 'Release year must be 1888 or later']
     },
     releaseDate:{
         type:Date
     },
     createdAt:{
         type:Date,
-        default:Date.now(),
+        default:Date.now,
         select:false
     },
     genres:{
@@ -71,7 +70,8 @@ const movieSchema =new mongoose.Schema({
     },
     price:{
         type: Number,
-        required:[true,'Price is Required']
+        required:[true,'Price is Required'],
+        min: [0, 'Price cannot be negative']
     },
     createdBy:String
 },{
@@ -80,24 +80,16 @@ const movieSchema =new mongoose.Schema({
 });
 //CREATING A VIRTUAL PROPERTIES
 movieSchema.virtual('durationInHours').get(function(){
-    return this.duration/60;
+    return Number((this.duration / 60).toFixed(2));
 })
 
-movieSchema.pre('save', function(next) {
+movieSchema.pre('save', function() {
     this.createdBy= 'Francis'
-    
 })
 
-movieSchema.post('save', function(doc){
-    const content=`A new movie document with name ${doc.name} has been created by ${doc.createdBy}\n`;
-    fs.writeFileSync('./log/log.txt', content,{flag:'a'}, (err)=>{
-        console.log(err.message)
-    })
-})
-
-//USING UNSHIFT ADD DATA TO THE BEGINNINIG OF AN ARRAY
 movieSchema.pre('aggregate', function(){
-    console.log(this.pipeline().unshift({$match:{releaseDate:{$lte:new Date()}}}))
+    this.pipeline().unshift({$match:{releaseDate:{$lte:new Date()}}});
 })
+
 const Movie =mongoose.model('movie', movieSchema);
 module.exports = Movie;

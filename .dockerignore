@@ -1,0 +1,8 @@
+node_modules
+.git
+config.env
+.env
+.env.*
+frontend-*.png
+coverage
+log

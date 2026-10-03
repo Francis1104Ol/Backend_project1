@@ -1,17 +1,23 @@
  const mongoose = require('mongoose');
- const dotenv =require('dotenv');
- const fs =require('fs');
- const Movie =require('./../Models/movieModel');
+ const dotenv = require('dotenv');
+ const fs = require('fs');
+ const Movie = require('./../Models/movieModel');
 
  dotenv.config({path:'./config.env'})
- //connect to MONGODB
+
+ if (!process.env.CONN_STR) {
+  console.error('Missing CONN_STR. Copy config.example.env to config.env and add your MongoDB connection string.');
+  process.exit(1);
+ }
+
  mongoose.connect(process.env.CONN_STR)
- .then(() => {
-     console.log('DB connection Success');
- })
- .catch((err) => {
-     console.log('DB connection error:', err);
- });
+  .then(() => {
+    console.log('DB connection successful');
+  })
+  .catch((err) => {
+    console.error('DB connection error:', err.message);
+    process.exit(1);
+  });
 
  //read the movie.json file
 
@@ -22,7 +28,7 @@
     await Movie.deleteMany();
     console.log('Data Successfully deleted!')
   }catch(err){
-    console.log(err.message)
+    console.error(err.message)
   }
   process.exit();
 }
@@ -33,19 +39,17 @@
     await Movie.create(movies);
     console.log('Data Successfully Imported!')
   }catch(err){
-    console.log(err.message)
+    console.error(err.message)
   }
   process.exit();
 }
 
 if(process.argv[2]=== '--import'){
   importMovies();
- }
-if(process.argv[2]=== '--delete'){
+} else if(process.argv[2]=== '--delete'){
   deleteMovies();
+} else {
+  console.log('Please specify --import or --delete');
+  process.exit();
 }
-deleteMovies();
- // importMovies();
-
-
 

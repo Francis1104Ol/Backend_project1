@@ -1,68 +1,64 @@
-const { stackTraceLimit } = require("../Utils/CustomError")
-const customError = require('../Utils/CustomError')
-const devErrors = (res, error)=>{
+const CustomError = require('../Utils/CustomError');
+
+const devErrors = (res, error) => {
+  res.status(error.statusCode).json({
+    status: error.status,
+    message: error.message,
+    stack: error.stack,
+    error,
+  });
+};
+
+const castErrorHandler = (err) => {
+  const msg = `Invalid value for ${err.path}: ${err.value}`;
+  return new CustomError(msg, 400);
+};
+
+const duplicateKeyErrorHandler = (err) => {
+  const field = Object.keys(err.keyValue || {})[0] || 'field';
+  const value = err.keyValue ? err.keyValue[field] : 'that value';
+  return new CustomError(`A record with ${field} "${value}" already exists.`, 400);
+};
+
+const validationErrorHandler = (err) => {
+  const errorMessages = Object.values(err.errors).map((val) => val.message).join(', ');
+  return new CustomError(`Invalid input data: ${errorMessages}`, 400);
+};
+
+const handleExpiredJwt = () => new CustomError('JWT has expired. Please log in again.', 401);
+
+const handledJwtError = () => new CustomError('Invalid token. Please log in again.', 401);
+
+const prodErrors = (res, error) => {
+  if (error.isOperational) {
     res.status(error.statusCode).json({
-        status:error.status,
-        message:error.message,
-        stackTrace:error.stack,
-        error:error
+      status: error.status,
+      message: error.message,
     });
-} 
- 
-const castErrorHandler =(err)=>{
-    const msg = `Invalid Value for ${err.path} : ${err.value}`
-    return new customError(msg, 400)
-}
-const duplicateKeyErrorHandler  =(err)=>{
-    const name = err.keyValue.name
-    const msg =`There is already a movie with name ${name}. please use another name!`
-    
-   
-    return new customError(msg, 400)
-}
-const validationErrorHandler =(err)=>{
-    const errors=Object.values(err.errors).map(val =>val.message)
-    const errorMessages =errors.join(', ')
-    const msg =`Invalid input data:${errorMessages}`
-   
-    return new customError(msg, 400);
-}
+  } else {
+    console.error(error);
+    res.status(500).json({
+      status: 'error',
+      message: 'Something went wrong. Please try again later.',
+    });
+  }
+};
 
-const handleExpiredJwt = (err)=>{
-    return new customError('Jwt has expired. Please login again!', 401)
-}
+module.exports = (error, req, res, next) => {
+  let err = error;
+  err.statusCode = err.statusCode || 500;
+  err.status = err.status || 'error';
 
-const handledJwtError = (error)=>{
-    return new customError('Invalid  token. please login again', 401)
-}
-const prodErrors= (res, error)=>{
-    if(error.isOperational){
-     res.status(error.statusCode).json({
-        status:error.status,
-        message:error.message,
-     })
-    }else{
-        res.status(500).json({
-            status: 'error',
-            message:'Something went wrong! Please try again later.'
-        })
-    }
-}
+  if (err.name === 'CastError') err = castErrorHandler(err);
+  if (err.code === 11000) err = duplicateKeyErrorHandler(err);
+  if (err.name === 'ValidationError') err = validationErrorHandler(err);
+  if (err.name === 'TokenExpiredError') err = handleExpiredJwt(err);
+  if (err.name === 'JsonWebTokenError') err = handledJwtError(err);
 
-module.exports=(error, req, res, next)=>{
-    error.statusCode = error.statusCode || 500
-    error.status = error.status||'error';
+  if (process.env.NODE_ENV === 'development') {
+    devErrors(res, err);
+    return;
+  }
 
-    if(process.env.NODE_ENV ==='development'){
-        devErrors(res, error)
-}else if(process.env.NODE_ENV ==='production'){
-
-    if(error.name === 'CastError')error = castErrorHandler(error)
-    if(error.code === 11000) error =duplicateKeyErrorHandler(error)
-    if(error.name ==='ValidationError') error = validationErrorHandler(error)
-    if(error.name === 'TokenExpiredError')error = handleExpiredJwt(error)
-     if(error.name === 'JsonWebTokenError')error = handledJwtError(error)
-       
-        prodErrors(res, error)
-}
-}
+  prodErrors(res, err);
+};

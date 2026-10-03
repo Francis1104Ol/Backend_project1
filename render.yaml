@@ -1,0 +1,23 @@
+services:
+  - type: web
+    name: cineindex
+    runtime: node
+    plan: free
+    buildCommand: npm ci
+    startCommand: npm start
+    healthCheckPath: /health
+    envVars:
+      - key: NODE_VERSION
+        value: '24'
+      - key: NODE_ENV
+        value: production
+      - key: TRUST_PROXY_HOPS
+        value: '1'
+      - key: CONN_STR
+        sync: false
+      - key: SECRET_STR
+        generateValue: true
+      - key: LOGIN_EXPIRES
+        value: 90d
+      - key: COOKIES_EXPIRES
+        value: '90'

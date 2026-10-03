@@ -1,15 +1,20 @@
-const User = require('../Models/userModel')
-const asyncErrorHandler = require('../Utils/asyncErrorHandler')
-const jwt = require('jsonwebtoken')
-const CustomError = require('../Utils/CustomError')
-const util = require ('util')
-const sendMail = require('../Utils/email')
-const crypto = require('crypto')
+const User = require('../Models/userModel');
+const asyncErrorHandler = require('../Utils/asyncErrorHandler');
+const jwt = require('jsonwebtoken');
+const CustomError = require('../Utils/CustomError');
+const util = require('util');
+const sendMail = require('../Utils/email');
+const crypto = require('crypto');
 const createSendResponse = require('../Utils/createSendResponse');
 
  
 exports.signup= asyncErrorHandler(async (req, res, next)=>{
-   const newUser = await User.create(req.body);
+   const newUser = await User.create({
+    name: req.body.name,
+    email: req.body.email,
+    password: req.body.password,
+    confirmPassword: req.body.confirmPassword,
+   });
    createSendResponse(newUser, 201, res)
 })
 //Check if email and password is present in the request body
@@ -52,7 +57,7 @@ if (!token){
 
 //2 validate the token
 const decodedToken = await util.promisify(jwt.verify)(token, process.env.SECRET_STR)
-console.log(decodedToken)
+
 //3. if the user exist
 const user = await User.findById(decodedToken.id)
 if(!user){
@@ -101,7 +106,7 @@ exports.forgotPassword =  asyncErrorHandler(async(req, res, next) =>{
     await user.save({validateBeforeSave:false});
 
     //SEND THE TOKEN BACK TO THE USER EMAIL
-    const resetUrl=`${req.protocol}://${req.get('host')}/api/v1/users/resetPassword/${resetToken}`;
+    const resetUrl=`${req.protocol}://${req.get('host')}/api/v1/auth/resetPassword/${resetToken}`;
     const message =`we have recieve a password reset request. please use the below link to reset your password\n\n${resetUrl}\n\nThis reset password link will be valid only for 10 minutes.`;
 try{
    await sendMail({
